@@ -15,9 +15,22 @@ const isSignUp = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
 
-const handleSocialLogin = (platform: string) => {
-  console.log(`Login with ${platform}`)
-  router.push('/dashboard')
+const handleSocialLogin = async (platform: string) => {
+  loading.value = true;
+  errorMessage.value = '';
+  try {
+    const { error } = await import('../lib/supabase').then(m => m.supabase.auth.signInWithOAuth({
+      provider: platform.toLowerCase() as 'google' | 'apple',
+      options: {
+        redirectTo: window.location.origin + '/dashboard'
+      }
+    }));
+    if (error) throw error;
+  } catch (err: any) {
+    errorMessage.value = err.message;
+  } finally {
+    loading.value = false;
+  }
 }
 
 const handleEmailAuth = async () => {
