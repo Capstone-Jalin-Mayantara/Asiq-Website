@@ -51,3 +51,27 @@ Alur 1: User membuat laporan
 7. Guru melihat dan mengunduh hasil materi pembelajaran yang telah disesuaikan.
 
 ## 🗂️ Desain _Database_
+
+Basis data dibangun menggunakan **Supabase** (PostgreSQL) yang terdiri dari tabel bawaan untuk autentikasi dan tabel khusus untuk menyimpan hasil generasi AI.
+
+### 1. Tabel `auth.users` (Bawaan Supabase)
+Digunakan untuk manajemen akun Guru/Admin.
+- `id` (UUID) - Primary Key
+- `email` (String) - Email pengguna
+- `created_at` (Timestamp)
+
+### 2. Tabel `public.materials`
+Menyimpan riwayat dokumen dan hasil orkestrasi AI dari setiap guru.
+- `id` (UUID) - Primary Key, Default: `gen_random_uuid()`
+- `user_id` (UUID) - Foreign Key ke `auth.users(id)` (ON DELETE CASCADE)
+- `raw_content` (TEXT) - Teks materi mentah yang diinputkan guru.
+- `student_profile` (TEXT) - Data lengkap karakteristik profil murid (termasuk jenjang, mapel, jumlah pertemuan, dan disabilitas).
+- `strategy` (TEXT) - Output dari Agent 1 (Learner Profiling Agent).
+- `adapted_content` (TEXT) - Output materi yang sudah diadaptasi dari Agent 2 (Adaptive Transformation Agent).
+- `readability_score` (INTEGER) - Skor keterbacaan dari Agent 3.
+- `accessibility_score` (INTEGER) - Skor aksesibilitas dari Agent 3.
+- `strengths` (JSONB) - Array objek kekuatan materi dari Agent 3.
+- `resources` (JSONB) - Array objek rekomendasi sumber belajar dari Agent 3.
+- `created_at` (TIMESTAMP) - Waktu data dibuat.
+
+*(Catatan: Tabel ini dilindungi dengan Row Level Security (RLS) di mana pengguna hanya dapat membuat dan melihat materi miliknya sendiri).*
