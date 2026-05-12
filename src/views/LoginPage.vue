@@ -9,14 +9,41 @@ import {
 
 const router = useRouter()
 const isLoginFormVisible = ref(false)
+const email = ref('')
+const password = ref('')
+const isSignUp = ref(false)
+const loading = ref(false)
+const errorMessage = ref('')
 
 const handleSocialLogin = (platform: string) => {
   console.log(`Login with ${platform}`)
   router.push('/dashboard')
 }
 
-const handleEmailLogin = () => {
-  router.push('/dashboard')
+const handleEmailAuth = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    if (isSignUp.value) {
+      const { error } = await import('../lib/supabase').then(m => m.supabase.auth.signUp({
+        email: email.value,
+        password: password.value,
+      }))
+      if (error) throw error
+      alert('Pendaftaran berhasil! Cek email Anda untuk verifikasi.')
+    } else {
+      const { error } = await import('../lib/supabase').then(m => m.supabase.auth.signInWithPassword({
+        email: email.value,
+        password: password.value,
+      }))
+      if (error) throw error
+      router.push('/dashboard')
+    }
+  } catch (err: any) {
+    errorMessage.value = err.message
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -58,7 +85,7 @@ const handleEmailLogin = () => {
               <div class="flex items-center justify-center gap-3 mb-6">
                 <img :src="logoUrl" alt="ASIQ Logo" class="h-10 w-auto" />
               </div>
-              <h2 class="text-xl font-bold text-slate-900">Masuk (login) dengan akun Anda</h2>
+              <h2 class="text-xl font-bold text-slate-900">{{ isSignUp ? 'Buat Akun Baru' : 'Masuk (login) dengan akun Anda' }}</h2>
             </div>
 
             <!-- Social Buttons -->
@@ -78,29 +105,35 @@ const handleEmailLogin = () => {
             </div>
 
             <!-- Email Form -->
-            <form @submit.prevent="handleEmailLogin" class="space-y-4">
+            <form @submit.prevent="handleEmailAuth" class="space-y-4">
+              <div v-if="errorMessage" class="p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100">
+                {{ errorMessage }}
+              </div>
               <div class="space-y-2">
                 <div class="relative">
                   <User class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input type="text" placeholder="Nama Pengguna / Email / Surel" class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-xl focus:border-blue-600 focus:bg-white outline-none transition-all placeholder:text-slate-400" />
+                  <input v-model="email" type="email" required placeholder="Email / Surel" class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-xl focus:border-blue-600 focus:bg-white outline-none transition-all placeholder:text-slate-400" />
                 </div>
               </div>
               <div class="space-y-2">
                 <div class="relative">
                   <Lock class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input type="password" placeholder="Kata Sandi" class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-xl focus:border-blue-600 focus:bg-white outline-none transition-all placeholder:text-slate-400" />
+                  <input v-model="password" type="password" required placeholder="Kata Sandi" class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-xl focus:border-blue-600 focus:bg-white outline-none transition-all placeholder:text-slate-400" />
                 </div>
               </div>
-              <div class="flex @justify-end">
+              <div class="flex justify-end" v-if="!isSignUp">
                 <a href="#" class="text-sm font-semibold text-blue-600 hover:underline">Apakah Anda lupa kata sandinya?</a>
               </div>
               
-              <button type="submit" class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:-translate-y-0.5 transition-all">
-                Masuk (Login)
+              <button type="submit" :disabled="loading" class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                {{ loading ? 'Memproses...' : (isSignUp ? 'Daftar' : 'Masuk (Login)') }}
               </button>
 
               <p class="text-center text-sm text-slate-500">
-                Belum memiliki akun? <a href="#" class="font-bold text-blue-600 hover:underline">Buat Akun</a>
+                {{ isSignUp ? 'Sudah memiliki akun?' : 'Belum memiliki akun?' }} 
+                <button type="button" @click="isSignUp = !isSignUp" class="font-bold text-blue-600 hover:underline">
+                  {{ isSignUp ? 'Masuk' : 'Buat Akun' }}
+                </button>
               </p>
             </form>
           </div>

@@ -1,18 +1,75 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { logoUrl } from '../constants'
+import { supabase } from '../lib/supabase'
+import { useRouter } from 'vue-router'
+import { processAdaptiveLearning } from '../services/ai'
 import { 
   LayoutDashboard, FolderOpen, GraduationCap, 
   Users, Library, Search, Bell, Settings, 
   HelpCircle, ChevronDown, Plus, FileText, 
   PenTool, BookOpen, UserCircle, LogOut,
   CheckCircle2, AlertCircle, ArrowRight, Download, Share2,
-  MoreVertical, BookCopy, Zap, Clock
+  MoreVertical, BookCopy, Zap, Clock, Check, Star
 } from 'lucide-vue-next'
-import { motion } from 'motion/vue'
 
+const router = useRouter()
 const activeTab = ref('dashboard') // 'dashboard', 'rpp-form', 'processing', 'results'
 const activeMenu = ref('Dasbor')
+const userEmail = ref('')
+
+onMounted(async () => {
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) {
+    router.push('/')
+  } else {
+    userEmail.value = data.session.user.email || ''
+  }
+})
+
+const handleLogout = async () => {
+  await supabase.auth.signOut()
+  router.push('/')
+}
+
+const rawMaterial = ref('')
+const studentProfile = ref('')
+
+const selectedJenjang = ref('')
+const selectedMataPelajaran = ref('')
+const selectedPertemuan = ref('')
+const selectedDisabilitas = ref('')
+
+const jenjangOptions = [
+  'PAUD', 'SD/MI Tingkat 1', 'SD/MI Tingkat 2', 'SD/MI Tingkat 3', 
+  'SD/MI Tingkat 4', 'SD/MI Tingkat 5', 'SD/MI Tingkat 6', 
+  'SMP/MTS Tingkat 7', 'SMP/MTS Tingkat 8', 'SMP/MTS Tingkat 9', 
+  'SMA/MA Tingkat 10', 'SMA/MA Tingkat 11', 'SMA/MA Tingkat 12', 
+  'Perguruan Tinggi', 'Profesional/Trainer', 'SMK'
+];
+
+const mataPelajaranOptions = [
+  'Bahasa Indonesia', 'Bahasa Inggris', 'Matematika Wajib', 'Sejarah Indonesia', 
+  'Pendidikan Pancasila', 'PJOK', 'Seni Budaya', 'Prakarya', 'Informatika', 
+  'Agama Islam', 'Agama Kristen', 'Agama Katolik', 'Agama Hindu', 
+  'PENDIDIKAN AGAMA BUDDHA DAN BUDI PEKERTI', 'Agama Khonghucu', 
+  'Matematika Peminatan', 'Fisika', 'Kimia', 'Biologi', 'Ekonomi', 
+  'Sosiologi', 'Geografi', 'Sejarah Peminatan', 'Bahasa dan Sastra Indonesia', 
+  'Bahasa dan Sastra Inggris', 'Bahasa Arab', 'Bahasa Jepang', 'Bahasa Mandarin', 
+  'Bahasa Jerman', 'Bahasa Prancis', 'Antropologi', 'Al-Qur’an Hadis', 
+  'Akidah Akhlak', 'Fiqih', 'Sejarah Kebudayaan Islam (SKI)', 
+  'Kecerdasan Buatan (AI)', 'Muatan Lokal (Bahasa Daerah)'
+];
+
+const jumlahPertemuanOptions = ['1x', '2x', '3x', '4x', '5x'];
+
+const disabilitasOptions = [
+  'Disabilitas Netra', 'Disabilitas Rungu', 'Disabilitas Daksa', 
+  'Disabilitas Intelektual', 'Gangguan Emosi dan Perilaku', 
+  'Gangguan Komunikasi', 'Disabilitas Mental', 
+  'Gangguan Perhatian dan Hiperaktivitas', 'Kesulitan Belajar spesifik', 
+  'Gangguan Spektrum Autis (ASD)'
+];
 
 const sidebarItems = [
   { name: 'Dasbor', icon: LayoutDashboard, badge: '' },
@@ -30,23 +87,70 @@ const stats = [
 
 const recentRPP = ref({
   title: 'Hasil Adaptasi RPP',
-  subText: 'Multi-agent analysis finished for "Introduction to Photosynthesis - Grade 7"',
+  subText: 'Multi-agent analysis finished',
   readability: 85,
   accessibility: 85,
   strengths: [
-    { title: 'Cognitive Alignment', desc: 'Learning objectives are clearly mapped to Bloom\'s Taxonomy, specifically hitting application and analysis levels.' },
-    { title: 'Time Management', desc: 'Activity durations are realistic and well-proportioned between direct instruction and active learning phases.' }
+    { title: 'Cognitive Alignment', desc: 'Learning objectives are clearly mapped.' }
   ],
   resources: [
-    { name: 'Interactive Virtual Lab', type: 'Simulation for Chlorophyll Extraction', icon: FileText },
-    { name: 'Student Worksheet V2', type: 'Modified for diverse learning needs', icon: BookCopy }
+    { name: 'Interactive Virtual Lab', type: 'Simulation', icon: FileText }
   ]
 })
 
 const rppStep = ref(1)
 
 const startRPP = () => { activeTab.value = 'rpp-form' }
-const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { activeTab.value = 'results' }, 3000) }
+const processRPP = async () => { 
+  if (!rawMaterial.value || !studentProfile.value || !selectedJenjang.value || !selectedMataPelajaran.value || !selectedDisabilitas.value || !selectedPertemuan.value) {
+    alert("Mohon lengkapi semua isian formulir (Jenjang, Mata Pelajaran, Jumlah Pertemuan, Disabilitas, Materi Mentah, dan Identifikasi Murid) terlebih dahulu.");
+    return;
+  }
+  activeTab.value = 'processing'
+  
+  const fullProfile = `Jenjang/Tingkat: ${selectedJenjang.value}
+Mata Pelajaran: ${selectedMataPelajaran.value}
+Jumlah Pertemuan: ${selectedPertemuan.value}
+Disabilitas: ${selectedDisabilitas.value}
+
+Karakteristik Murid:
+${studentProfile.value}`;
+
+  try {
+    const result = await processAdaptiveLearning(rawMaterial.value, fullProfile);
+    
+    // Save to Supabase DB
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      await supabase.from('materials').insert({
+        user_id: sessionData.session.user.id,
+        raw_content: rawMaterial.value,
+        student_profile: studentProfile.value,
+        strategy: result.strategy,
+        adapted_content: result.adaptedMaterial,
+        readability_score: result.readabilityScore,
+        accessibility_score: result.accessibilityScore,
+        strengths: result.strengths,
+        resources: result.resources
+      });
+    }
+
+    recentRPP.value = {
+      title: 'Hasil Adaptasi AI',
+      subText: result.strategy.substring(0, 100) + '...',
+      readability: result.readabilityScore,
+      accessibility: result.accessibilityScore,
+      strengths: result.strengths,
+      resources: result.resources.map((r: any) => ({...r, icon: FileText}))
+    };
+
+    activeTab.value = 'results'
+  } catch (error) {
+    console.error("Error processing AI:", error);
+    alert("Terjadi kesalahan saat memproses data.");
+    activeTab.value = 'rpp-form'
+  }
+}
 </script>
 
 <template>
@@ -138,13 +242,12 @@ const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { ac
 
           <div class="flex items-center gap-3 pl-4 border-l border-slate-200">
             <div class="flex flex-col items-end">
-              <span class="text-sm font-bold text-slate-900 whitespace-nowrap">BAGUS SETIA...</span>
+              <span class="text-sm font-bold text-slate-900 whitespace-nowrap">{{ userEmail ? userEmail.split('@')[0].toUpperCase() : 'USER' }}</span>
               <span class="text-[10px] font-bold text-green-500 uppercase">Online</span>
             </div>
-            <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold border-2 border-white shadow-sm overflow-hidden">
-               <img src="https://ui-avatars.com/api/?name=Bagus+Setiawan&background=FB923C&color=fff" alt="Avatar" />
-            </div>
-            <ChevronDown class="w-4 h-4 text-slate-400" />
+            <button @click="handleLogout" class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold border-2 border-white shadow-sm overflow-hidden hover:bg-orange-200 transition-all">
+               <LogOut class="w-5 h-5" />
+            </button>
           </div>
         </div>
       </header>
@@ -293,15 +396,9 @@ const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { ac
             <div class="space-y-6">
               <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2">Dokumen</p>
               <div class="space-y-4">
-                <label class="block text-sm font-bold text-slate-900">Lokasi Penyimpanan Berkas</label>
-                <div class="relative">
-                   <div class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"><FolderOpen class="w-full h-full" /></div>
-                   <select class="w-full pl-12 pr-10 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600">
-                     <option>Pilih Penyimpanan Berkas</option>
-                   </select>
-                   <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                </div>
-                <p class="text-xs text-slate-400 italic">Lokasi penyimpanan berkas sebagai tempat untuk menyimpan pembelajaran yang Anda buat dengan AI</p>
+                <label class="block text-sm font-bold text-slate-900">Materi Mentah (Teks)</label>
+                <textarea v-model="rawMaterial" rows="6" placeholder="Masukkan teks materi pembelajaran Anda di sini..." class="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-600 transition-all text-sm text-slate-600"></textarea>
+                <p class="text-xs text-slate-400 italic">Materi yang dimasukkan akan dianalisis dan disesuaikan dengan kebutuhan siswa.</p>
               </div>
             </div>
 
@@ -311,8 +408,9 @@ const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { ac
                 <div class="space-y-4">
                   <label class="block text-sm font-bold text-slate-900">Jenjang/Tingkat</label>
                   <div class="relative">
-                    <select class="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600">
-                      <option>Pilih Jenjang & Tingkat</option>
+                    <select v-model="selectedJenjang" class="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600">
+                      <option value="" disabled>Pilih Jenjang & Tingkat</option>
+                      <option v-for="option in jenjangOptions" :key="option" :value="option">{{ option }}</option>
                     </select>
                     <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   </div>
@@ -320,8 +418,9 @@ const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { ac
                 <div class="space-y-4">
                   <label class="block text-sm font-bold text-slate-900">Mata Pelajaran</label>
                   <div class="relative">
-                    <select disabled class="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none opacity-50 appearance-none text-sm text-slate-600">
-                      <option>Pilih Jenjang/Tingkat dulu</option>
+                    <select v-model="selectedMataPelajaran" :disabled="!selectedJenjang" :class="[!selectedJenjang ? 'opacity-50' : '', 'w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600']">
+                      <option value="" disabled>Pilih Mata Pelajaran</option>
+                      <option v-for="option in mataPelajaranOptions" :key="option" :value="option">{{ option }}</option>
                     </select>
                     <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   </div>
@@ -334,9 +433,9 @@ const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { ac
                   <label class="block text-sm font-bold text-slate-900">Jumlah Pertemuan</label>
                   <div class="flex gap-4">
                     <div class="relative flex-grow">
-                      <select class="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600">
-                        <option>1x</option>
-                        <option>2x</option>
+                      <select v-model="selectedPertemuan" class="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600">
+                        <option value="" disabled>Pilih Jumlah</option>
+                        <option v-for="option in jumlahPertemuanOptions" :key="option" :value="option">{{ option }}</option>
                       </select>
                       <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     </div>
@@ -346,8 +445,9 @@ const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { ac
                 <div class="space-y-4">
                   <label class="block text-sm font-bold text-slate-900">Disabilitas</label>
                   <div class="relative">
-                    <select class="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600">
-                      <option>Disabilitas yang Dimiliki</option>
+                    <select v-model="selectedDisabilitas" class="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-600 appearance-none text-sm text-slate-600">
+                      <option value="" disabled>Disabilitas yang Dimiliki</option>
+                      <option v-for="option in disabilitasOptions" :key="option" :value="option">{{ option }}</option>
                     </select>
                     <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   </div>
@@ -356,7 +456,7 @@ const processRPP = () => { activeTab.value = 'processing'; setTimeout(() => { ac
 
               <div class="space-y-4">
                 <label class="block text-sm font-bold text-slate-900">Identifikasi Murid</label>
-                <textarea rows="4" placeholder="Contoh: Murid kelas 3 non inklusi dengan pengetahuan level siswa belum mengenal energi di sekitar dengan sekolah daerah perkotaan dengan budaya belajar" class="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-600 transition-all text-sm text-slate-600"></textarea>
+                <textarea v-model="studentProfile" rows="4" placeholder="Contoh: Murid kelas 3 non inklusi dengan pengetahuan level siswa belum mengenal energi di sekitar dengan sekolah daerah perkotaan dengan budaya belajar" class="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-600 transition-all text-sm text-slate-600"></textarea>
               </div>
             </div>
 
