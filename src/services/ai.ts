@@ -6,7 +6,8 @@ export async function processAdaptiveLearning(params: {
   pertemuan: string;
   disabilitas: string;
 }) {
-  const asiqApiUrl = import.meta.env.VITE_ASIQ_API_URL || 'http://13.212.231.53:8000';
+  const isProd = import.meta.env.PROD;
+  const asiqApiUrl = isProd ? '' : (import.meta.env.VITE_ASIQ_API_URL || 'http://13.212.231.53:8000');
   const asiqApiKey = import.meta.env.VITE_ASIQ_API_KEY || 'asiq-prod-2026-secret';
 
   const formData = new FormData();
