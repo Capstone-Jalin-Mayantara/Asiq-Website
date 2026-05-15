@@ -117,7 +117,14 @@ Karakteristik Murid:
 ${studentProfile.value}`;
 
   try {
-    const result = await processAdaptiveLearning(rawMaterial.value, fullProfile);
+    const result = await processAdaptiveLearning({
+      rawMaterial: rawMaterial.value,
+      studentProfile: studentProfile.value,
+      jenjang: selectedJenjang.value,
+      mataPelajaran: selectedMataPelajaran.value,
+      pertemuan: selectedPertemuan.value,
+      disabilitas: selectedDisabilitas.value
+    });
     
     // Save to Supabase DB
     const { data: sessionData } = await supabase.auth.getSession();
@@ -145,9 +152,9 @@ ${studentProfile.value}`;
     };
 
     activeTab.value = 'results'
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error processing AI:", error);
-    alert("Terjadi kesalahan saat memproses data.");
+    alert("Terjadi kesalahan saat memproses data: " + (error?.message || error));
     activeTab.value = 'rpp-form'
   }
 }

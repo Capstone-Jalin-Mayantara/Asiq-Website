@@ -1,89 +1,83 @@
-import { GoogleGenAI } from '@google/genai';
+export async function processAdaptiveLearning(params: {
+  rawMaterial: string;
+  studentProfile: string;
+  jenjang: string;
+  mataPelajaran: string;
+  pertemuan: string;
+  disabilitas: string;
+}) {
+  const asiqApiUrl = import.meta.env.VITE_ASIQ_API_URL || 'http://13.212.231.53:8000';
+  const asiqApiKey = import.meta.env.VITE_ASIQ_API_KEY || 'asiq-prod-2026-secret';
 
-// Initialize Gemini client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const formData = new FormData();
+  formData.append('nama_siswa', 'Siswa');
+  formData.append('kelas', params.jenjang);
+  formData.append('mata_pelajaran', params.mataPelajaran);
+  formData.append('gejala', params.disabilitas + (params.studentProfile ? ', ' + params.studentProfile : ''));
+  formData.append('materi_mentah', params.rawMaterial);
 
-export async function processAdaptiveLearning(
-  rawMaterial: string,
-  studentProfile: string
-) {
-  // Agent 1: Learner Profiling Agent
-  const strategyPrompt = `
-You are the Learner Profiling Agent.
-Analyze the following student profile and generate a teaching strategy.
-Student Profile: ${studentProfile}
-
-Provide a concise strategy (2-3 paragraphs) focusing on how to adapt educational materials.
-`;
-  const strategyResponse = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: strategyPrompt,
-  });
-  const strategy = strategyResponse.text;
-
-  // Agent 2: Adaptive Transformation Agent
-  const adaptPrompt = `
-You are the Adaptive Transformation Agent.
-Transform the following raw learning material based on the teaching strategy.
-
-Teaching Strategy:
-${strategy}
-
-Raw Material:
-${rawMaterial}
-
-Provide the adapted learning material in Markdown format. Make it engaging, structured, and strictly adhere to the teaching strategy.
-`;
-  const adaptResponse = await ai.models.generateContent({
-    model: 'gemini-2.5-pro',
-    contents: adaptPrompt,
-  });
-  const adaptedMaterial = adaptResponse.text;
-
-  // Agent 3: Inclusivity Insight Agent
-  const insightPrompt = `
-You are the Inclusivity Insight Agent.
-Evaluate the following adapted learning material.
-
-Adapted Material:
-${adaptedMaterial}
-
-Provide your response strictly in the following JSON format:
-{
-  "readability_score": <number between 0-100>,
-  "accessibility_score": <number between 0-100>,
-  "strengths": [
-    { "title": "<strength title>", "desc": "<strength description>" }
-  ],
-  "resources": [
-    { "name": "<resource name>", "type": "<resource type (e.g., Simulation, Worksheet, Video)>" }
-  ]
-}
-`;
-  const insightResponse = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: insightPrompt,
-    config: {
-        responseMimeType: "application/json"
-    }
+  // 1. Generate Request
+  const generateRes = await fetch(`${asiqApiUrl}/api/rpp/generate`, {
+    method: 'POST',
+    headers: { 'X-API-Key': asiqApiKey },
+    body: formData
   });
 
-  let insight: any = {};
-  try {
-    insight = JSON.parse(insightResponse.text || "{}");
-  } catch (e) {
-    console.error("Failed to parse insight JSON", e);
+  if (!generateRes.ok) {
+    throw new Error(`API Error: ${generateRes.status}`);
   }
+
+  const generateData = await generateRes.json();
+  const jobId = generateData.job_id;
+
+  if (!jobId) {
+    throw new Error(generateData.detail || "Gagal mendapatkan Job ID");
+  }
+
+  // 2. Poll Status
+  let status = 'processing';
+  while (status === 'processing' || status === 'pending') {
+    await new Promise(r => setTimeout(r, 3000));
+    const statusRes = await fetch(`${asiqApiUrl}/api/rpp/status/${jobId}`, {
+      headers: { 'X-API-Key': asiqApiKey }
+    });
+    const statusData = await statusRes.json();
+    status = statusData.status;
+
+    if (status === 'failed') {
+      let errorMessage = "Proses gagal: " + (statusData.step || 'Unknown');
+      try {
+        const errRes = await fetch(`${asiqApiUrl}/api/rpp/result/${jobId}`, {
+          headers: { 'X-API-Key': asiqApiKey }
+        });
+        const errData = await errRes.json();
+        if (errData.detail) errorMessage = errData.detail;
+      } catch (e) {
+        // ignore error fetching detail
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  // 3. Get Result
+  const resultRes = await fetch(`${asiqApiUrl}/api/rpp/result/${jobId}`, {
+    headers: { 'X-API-Key': asiqApiKey }
+  });
+  const resultData = await resultRes.json();
+
+  // Extract from resultData
+  const adaptedMaterial = resultData.rpp || resultData.result || resultData.adapted_content || JSON.stringify(resultData);
+  const strategy = "RPP berhasil diadaptasi dengan ASIQ AI Multi-Agent";
 
   return {
     strategy,
     adaptedMaterial,
-    readabilityScore: insight.readability_score || 85,
-    accessibilityScore: insight.accessibility_score || 85,
-    strengths: insight.strengths || [
+    readabilityScore: resultData.readability_score || 85,
+    accessibilityScore: resultData.accessibility_score || 85,
+    strengths: resultData.strengths || [
         { title: 'Adaptive Pacing', desc: 'The material is broken down into manageable chunks.' }
     ],
-    resources: insight.resources || [
+    resources: resultData.resources || [
         { name: 'Interactive Practice', type: 'Worksheet' }
     ]
   };
