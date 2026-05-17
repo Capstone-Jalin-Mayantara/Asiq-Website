@@ -197,6 +197,23 @@ const handleDownload = async () => {
     alert('Gagal download: ' + e.message)
   }
 }
+
+const getConfidenceLabel = (score: number) => {
+  if (score <= 20) return 'Very Low Confidence'
+  if (score <= 40) return 'Low Confidence'
+  if (score <= 60) return 'Moderate Confidence'
+  if (score <= 80) return 'High Confidence'
+  return 'Very High Confidence'
+}
+
+const getConfidenceColor = (score: number) => {
+  if (score <= 20) return 'bg-red-50 text-red-600'
+  if (score <= 40) return 'bg-orange-50 text-orange-600'
+  if (score <= 60) return 'bg-yellow-50 text-yellow-600'
+  if (score <= 80) return 'bg-blue-50 text-blue-600'
+  return 'bg-green-50 text-green-600'
+}
+
 </script>
 
 <template>
@@ -609,14 +626,14 @@ const handleDownload = async () => {
               <div class="relative flex items-center justify-center">
                 <svg class="w-48 h-48 transform -rotate-90">
                   <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="12" fill="transparent" class="text-slate-100" />
-                  <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="12" fill="transparent" :stroke-dasharray="2 * Math.PI * 80" :stroke-dashoffset="2 * Math.PI * 80 * (1 - 0.85)" stroke-linecap="round" class="text-blue-600" />
+                  <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="12" fill="transparent" :stroke-dasharray="2 * Math.PI * 80" :stroke-dashoffset="2 * Math.PI * 80 * (1 - (recentRPP.readability / 100))" stroke-linecap="round" class="text-blue-600" />
                 </svg>
                 <div class="absolute flex flex-col items-center">
                    <span class="text-5xl font-black text-slate-900">{{ recentRPP.readability }}</span>
                    <span class="text-xs font-bold text-slate-400">/100</span>
                 </div>
               </div>
-              <div class="px-6 py-2 bg-blue-50 text-blue-600 rounded-full text-xs font-bold">High Confidence</div>
+              <div :class="['px-6 py-2 rounded-full text-xs font-bold', getConfidenceColor(recentRPP.readability)]">{{ getConfidenceLabel(recentRPP.readability) }}</div>
             </div>
 
             <div class="bg-white rounded-[2.5rem] p-10 border border-slate-200 text-center space-y-8 flex flex-col items-center justify-center min-h-[350px]">
@@ -624,14 +641,14 @@ const handleDownload = async () => {
               <div class="relative flex items-center justify-center">
                 <svg class="w-48 h-48 transform -rotate-90">
                   <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="12" fill="transparent" class="text-slate-100" />
-                  <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="12" fill="transparent" :stroke-dasharray="2 * Math.PI * 80" :stroke-dashoffset="2 * Math.PI * 80 * (1 - 0.85)" stroke-linecap="round" class="text-blue-600 shadow-xl" />
+                  <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="12" fill="transparent" :stroke-dasharray="2 * Math.PI * 80" :stroke-dashoffset="2 * Math.PI * 80 * (1 - (recentRPP.accessibility / 100))" stroke-linecap="round" class="text-blue-600 shadow-xl" />
                 </svg>
                 <div class="absolute flex flex-col items-center">
                    <span class="text-5xl font-black text-slate-900">{{ recentRPP.accessibility }}</span>
                    <span class="text-xs font-bold text-slate-400">/100</span>
                 </div>
               </div>
-              <div class="px-6 py-2 bg-blue-50 text-blue-600 rounded-full text-xs font-bold">High Confidence</div>
+              <div :class="['px-6 py-2 rounded-full text-xs font-bold', getConfidenceColor(recentRPP.accessibility)]">{{ getConfidenceLabel(recentRPP.accessibility) }}</div>
             </div>
           </div>
 
